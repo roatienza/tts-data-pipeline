@@ -16,7 +16,7 @@ This document summarizes the complete preprocessing of the LJSpeech dataset usin
 2. **Preprocessing**:
    - Sample rate conversion to 22,050 Hz
    - RMS normalization to -20dB
-   - Duration filtering (1-10 seconds)
+
 3. **Feature Extraction**:
    - Vocos feature extractor (BSC-LT/vocos-mel-22khz)
    - MEL spectrograms: 80 bins, log-mel
