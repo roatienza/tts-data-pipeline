@@ -1,0 +1,48 @@
+# TTS Data Pipeline Configuration
+
+audio:
+  sample_rate: 22050
+  n_mels: 80          # BSC-LT/vocos-mel-22khz uses 80 mel bins
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  fmin: 0
+  fmax: 8000
+  preemphasis: 0.0     # Vocos does not use pre-emphasis
+  log_mel: false       # Raw mel spectrograms for Vocos
+  normalization: "standard"
+  
+  mel_extractor: "vocos"  # Use Vocos feature extractor for better quality
+  
+  reconstruction:
+    vocoder: "vocos"
+    model_name: "BSC-LT/vocos-mel-22khz"
+    n_codebooks: 8
+    code_dim: 512
+
+text:
+  language: "en-us"
+  normalize: true      # ALWAYS normalize text
+  lowercase: true
+  expand_abbreviations: true
+  convert_numbers: true
+  
+  phonemizer:
+    backend: "espeak"
+    preserve_punctuation: true
+    with_stress: true
+    tie: true
+    
+  validation:
+    min_coverage: 0.95
+
+data_split:
+  test_samples: 100
+  val_ratio: 0.1
+
+# Development settings
+development:
+  sandbox_path: "/workspace/tts"
+  data_path: "/data/tts"
+  cache_path: "/data/tts/cache"
+  github_repo: "roatienza/ljspeech-vocos"
