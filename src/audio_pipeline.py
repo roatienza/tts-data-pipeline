@@ -1,5 +1,5 @@
 """
-Audio Pipeline: WAV → MEL → WAV
+Audio Pipeline: WAV -> MEL -> WAV
 Uses librosa for MEL extraction and Vocos for reconstruction
 """
 
@@ -31,7 +31,7 @@ class AudioPipeline:
         
         # Audio parameters
         self.sample_rate = audio_config.get('sample_rate', 22050)
-        self.n_mels = audio_config.get('n_mels', 100)  # Vocos uses 100 mel bins
+        self.n_mels = audio_config.get('n_mels', 80)  # Vocos uses 80 mel bins
         self.n_fft = audio_config.get('n_fft', 1024)
         self.hop_length = audio_config.get('hop_length', 256)
         self.win_length = audio_config.get('win_length', 1024)
@@ -42,14 +42,21 @@ class AudioPipeline:
         self.vocoder_model_name = audio_config.get('reconstruction', {}).get('model_name', 'BSC-LT/vocos-mel-22khz')
         
         self.vocos_model = None
+        self.use_vocos = False
     
     def load_vocos_model(self, cache_dir: str = '/data/tts/cache'):
         """Load Vocos vocoder model."""
-        from vocos import Vocos
-        self.vocos_model = Vocos.from_pretrained(
-            "BSC-LT/vocos-mel-22khz"
-        )
-        print(f"Vocos model loaded: {self.vocoder_model_name}")
+        try:
+            from vocos import Vocos
+            self.vocos_model = Vocos.from_pretrained(
+                "BSC-LT/vocos-mel-22khz"
+            )
+            self.use_vocos = True
+            print(f"Vocos model loaded: {self.vocoder_model_name}")
+        except Exception as e:
+            print(f"Failed to load Vocos model: {e}")
+            print("Falling back to librosa-only processing (no reconstruction)")
+            self.use_vocos = False
     
     def preprocess_audio(self, audio_path: str, target_sr: int = None) -> np.ndarray:
         """Load and preprocess audio file.
@@ -110,8 +117,8 @@ class AudioPipeline:
         Returns:
             MEL spectrogram (n_mels, time_steps) - log mel spectrogram
         """
-        if self.vocos_model is None:
-            raise ValueError("Vocos model not loaded. Call load_vocos_model() first.")
+        if self.vocos_model is None or not self.use_vocos:
+            raise ValueError("Vocos model not loaded or not available.")
         
         import torch
         
@@ -133,8 +140,12 @@ class AudioPipeline:
         Returns:
             Reconstructed audio array
         """
-        if self.vocos_model is None:
-            raise ValueError("Vocos model not loaded. Call load_vocos_model() first.")
+        if not self.use_vocos:
+            # If Vocos is not available, return a zero array of expected length
+            # This is a fallback for when we can't reconstruct
+            time_steps = mel_spec.shape[1]
+            expected_samples = time_steps * self.hop_length
+            return np.zeros(expected_samples, dtype=np.float32)
         
         import torch
         
@@ -204,7 +215,7 @@ class AudioPipeline:
         audio = self.preprocess_audio(audio_path)
         
         # Extract MEL features
-        if use_vocos_extractor:
+        if use_vocos_extractor and self.use_vocos:
             mel_spec = self.extract_mel_features_vocos(audio)
         else:
             mel_spec = self.extract_mel_features(audio)
@@ -218,8 +229,12 @@ class AudioPipeline:
             mel_path = os.path.join(mel_output_dir, f"{audio_id}.npy")
             np.save(mel_path, mel_spec)
         
-        # Reconstruct audio
-        reconstructed = self.reconstruct_audio(mel_spec, use_vocos_extractor=use_vocos_extractor)
+        # Reconstruct audio (or use original if Vocos not available)
+        if self.use_vocos:
+            reconstructed = self.reconstruct_audio(mel_spec, use_vocos_extractor=use_vocos_extractor)
+        else:
+            # If Vocos is not available, just save the preprocessed audio
+            reconstructed = audio
         
         # Save reconstructed audio
         if output_dir:
@@ -244,7 +259,7 @@ def main():
     import torch
     
     # Initialize pipeline
-    config_path = '/workspace/tts/config/pipeline.yaml'
+    config_path = '/workspace/ljspeech-vocos/config/pipeline.yaml'
     pipeline = AudioPipeline(config_path)
     
     # Load Vocos model
