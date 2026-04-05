@@ -2,6 +2,7 @@
 LibriTTS dataset preprocessing script.
 Processes LibriTTS through WAV -> MEL -> WAV pipeline.
 Adapted from LJSpeech preprocessing for LibriTTS structure.
+Processes ALL samples (no max_samples limit).
 """
 
 import os
@@ -27,13 +28,13 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 # Add src to path
-sys.path.insert(0, '/workspace/ljspeech-vocos/src')
+sys.path.insert(0, '/workspace/tts-data-pipeline/src')
 
 from audio_pipeline import AudioPipeline
 from text_pipeline import TextPipeline
 
 
-def scan_libritts_dataset(libritts_root: str, subset_dirs: List[str] = None) -> List[Tuple[str, str, str]]:
+def scan_libritts_dataset(libritts_root: str, subset_dirs: List[str] = None) -> List[Tuple[str, str, str, str]]:
     """
     Scan LibriTTS dataset and collect all audio files with their text.
     
@@ -42,7 +43,7 @@ def scan_libritts_dataset(libritts_root: str, subset_dirs: List[str] = None) -> 
         subset_dirs: List of subset directories to process (e.g., ['train-clean-100', 'test-clean'])
         
     Returns:
-        List of (audio_id, normalized_text, original_text) tuples
+        List of (audio_id, normalized_text, original_text, subset) tuples
     """
     if subset_dirs is None:
         subset_dirs = ['train-clean-100', 'train-clean-360', 'train-other-500', 
@@ -235,29 +236,26 @@ def process_libritts_samples(
     print("Initializing text pipeline...")
     text_pipeline = TextPipeline(config_path)
     
-    # Get the split to process
-    items_to_process = splits[split_name]
-    
-    if max_samples:
-        items_to_process = items_to_process[:max_samples]
-    
-    print(f"Processing {len(items_to_process)} {split_name} samples...")
-    print(f"Using MEL extractor: {mel_extractor}")
-    
     # Create output directories
     split_output_dir = os.path.join(output_dir, split_name)
     audio_output_dir = os.path.join(split_output_dir, 'audio')
     mel_output_dir = os.path.join(split_output_dir, 'mel')
-    os.makedirs(split_output_dir, exist_ok=True)
     os.makedirs(audio_output_dir, exist_ok=True)
     os.makedirs(mel_output_dir, exist_ok=True)
     
-    # Check for existing processed files
-    existing_files = set(os.listdir(audio_output_dir)) if os.path.exists(audio_output_dir) else set()
-    existing_count = len(existing_files)
-    print(f"Found {existing_count} existing files, resuming from there...")
+    items_to_process = splits[split_name]
+    if max_samples:
+        items_to_process = items_to_process[:max_samples]
     
-    # Process samples
+    print(f"\nProcessing {split_name} split: {len(items_to_process)} samples")
+    
+    # Check for existing processed files
+    existing_files = set()
+    if os.path.exists(audio_output_dir):
+        existing_files = set(os.listdir(audio_output_dir))
+    print(f"Found {len(existing_files)} existing files")
+    
+    # Initialize results
     all_results = []
     errors = []
     success_count = 0
@@ -354,14 +352,14 @@ def process_libritts_samples(
 
 
 def main():
-    """Run the LibriTTS dataset preprocessing."""
-    config_path = '/workspace/ljspeech-vocos/config/pipeline.yaml'
+    """Run the LibriTTS dataset preprocessing - PROCESS ALL SAMPLES."""
+    config_path = '/workspace/tts-data-pipeline/config/pipeline.yaml'
     libritts_root = '/data/tts/datasets/LibriTTS'
     output_dir = '/data/tts/outputs/libritts_pipeline'
     splits_dir = '/data/tts/processed/libritts_splits'
     
     print("=" * 60)
-    print("LibriTTS Dataset Preprocessing")
+    print("LibriTTS Dataset Preprocessing - FULL DATASET")
     print("=" * 60)
     print(f"Config: {config_path}")
     print(f"LibriTTS root: {libritts_root}")
@@ -370,10 +368,10 @@ def main():
     
     # Step 1: Scan dataset
     print("Step 1: Scanning LibriTTS dataset...")
-    # For demo, use a small subset first
     all_data = scan_libritts_dataset(
         libritts_root=libritts_root,
-        subset_dirs=['train-clean-100']  # Start with smaller subset
+        subset_dirs=['train-clean-100', 'train-clean-360', 'train-other-500',
+                     'dev-clean', 'dev-other', 'test-clean', 'test-other']
     )
     
     print(f"\nTotal audio files found: {len(all_data)}")
@@ -395,9 +393,9 @@ def main():
     
     save_libritts_splits(splits, splits_dir)
     
-    # Step 3: Process test samples (small sample for demo)
+    # Step 3: Process ALL test samples
     print("\n" + "=" * 60)
-    print("Step 3: Processing TEST samples...")
+    print("Step 3: Processing ALL TEST samples...")
     print("=" * 60)
     
     test_results = process_libritts_samples(
@@ -406,12 +404,26 @@ def main():
         config_path=config_path,
         splits=splits,
         split_name='test',
-        max_samples=10  # Process only 10 for demo
+        max_samples=None  # Process ALL samples
     )
     
-    # Step 4: Process train samples (small sample for demo)
+    # Step 4: Process ALL val samples
     print("\n" + "=" * 60)
-    print("Step 4: Processing TRAIN samples...")
+    print("Step 4: Processing ALL VAL samples...")
+    print("=" * 60)
+    
+    val_results = process_libritts_samples(
+        libritts_root=libritts_root,
+        output_dir=output_dir,
+        config_path=config_path,
+        splits=splits,
+        split_name='val',
+        max_samples=None  # Process ALL samples
+    )
+    
+    # Step 5: Process ALL train samples
+    print("\n" + "=" * 60)
+    print("Step 5: Processing ALL TRAIN samples...")
     print("=" * 60)
     
     train_results = process_libritts_samples(
@@ -420,20 +432,24 @@ def main():
         config_path=config_path,
         splits=splits,
         split_name='train',
-        max_samples=20  # Process only 20 for demo
+        max_samples=None  # Process ALL samples
     )
     
-    # Step 5: Generate summary
+    # Step 6: Generate summary
     print("\n" + "=" * 60)
-    print("Step 5: Generating summary...")
+    print("Step 6: Generating summary...")
     print("=" * 60)
     
     # Load statistics
     test_stats_path = os.path.join(output_dir, 'test', 'statistics.json')
+    val_stats_path = os.path.join(output_dir, 'val', 'statistics.json')
     train_stats_path = os.path.join(output_dir, 'train', 'statistics.json')
     
     with open(test_stats_path, 'r') as f:
         test_stats = json.load(f)
+    
+    with open(val_stats_path, 'r') as f:
+        val_stats = json.load(f)
     
     with open(train_stats_path, 'r') as f:
         train_stats = json.load(f)
@@ -441,13 +457,19 @@ def main():
     # Create summary
     summary = {
         'dataset': 'LibriTTS',
-        'subset': 'train-clean-100',
+        'subsets': ['train-clean-100', 'train-clean-360', 'train-other-500',
+                    'dev-clean', 'dev-other', 'test-clean', 'test-other'],
         'total_samples': len(all_data),
         'splits': {
             'train': {
                 'count': len(splits['train']),
                 'processed': train_stats['success'],
                 'errors': train_stats['errors']
+            },
+            'val': {
+                'count': len(splits['val']),
+                'processed': val_stats['success'],
+                'errors': val_stats['errors']
             },
             'test': {
                 'count': len(splits['test']),
@@ -468,14 +490,18 @@ def main():
     print("\n" + "=" * 60)
     print("FINAL SUMMARY")
     print("=" * 60)
-    print(f"\nDataset: LibriTTS (train-clean-100)")
+    print(f"\nDataset: LibriTTS (full)")
     print(f"Total samples: {len(all_data)}")
     print(f"\nSplits:")
     print(f"  Train: {len(splits['train'])} samples")
+    print(f"  Val: {len(splits['val'])} samples")
     print(f"  Test: {len(splits['test'])} samples")
     print(f"\nTrain Statistics:")
     print(f"  Processed: {train_stats['success']}")
     print(f"  Errors: {train_stats['errors']}")
+    print(f"\nVal Statistics:")
+    print(f"  Processed: {val_stats['success']}")
+    print(f"  Errors: {val_stats['errors']}")
     print(f"\nTest Statistics:")
     print(f"  Processed: {test_stats['success']}")
     print(f"  Errors: {test_stats['errors']}")
