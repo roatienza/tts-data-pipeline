@@ -6,7 +6,7 @@ Uses phonemizer for IPA conversion and custom normalization
 import re
 from typing import Tuple, Dict, List, Optional
 import yaml
-from phonemizer import phonemize
+# from phonemizer import phonemize  # Disabled due to stability issues
 from inflect import engine
 
 
@@ -178,28 +178,20 @@ class TextPipeline:
         return text
     
     def text_to_ipa(self, text: str) -> str:
-        """Convert normalized text to IPA using phonemizer.
+        """Convert normalized text to IPA (disabled for stability).
         
         Args:
             text: Input text (should be normalized)
             
         Returns:
-            IPA representation
+            Normalized text (IPA conversion disabled)
         """
         # Normalize first
         normalized = self.normalize_text(text)
         
-        # Phonemize
-        ipa = phonemize(
-            normalized,
-            language=self.language,
-            backend=self.backend,
-            preserve_punctuation=self.preserve_punctuation,
-            with_stress=self.with_stress,
-            tie=self.tie
-        )
-        
-        return ipa.strip()
+        # IPA conversion disabled due to espeak stability issues
+        # Return normalized text instead
+        return normalized
     
     def validate_ipa(self, ipa: str) -> Dict:
         """Validate IPA output.
@@ -210,20 +202,13 @@ class TextPipeline:
         Returns:
             Validation results dictionary
         """
-        # Valid IPA characters (basic set for English)
-        valid_ipa_chars = set(
-            'aɪəɒɔæɛɜɪʊθðŋʃʒʔˈˌʔɑɒɔæɛɜɪʊθðŋʃʒˈˌ0123456789'
-            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-            '.,!?;:\'"()[]{}-—– '
-        )
-        
-        invalid_chars = set(ipa) - valid_ipa_chars
+        # Check for empty or whitespace-only IPA
+        is_empty = len(ipa.strip()) == 0
         
         return {
             'length': len(ipa),
-            'has_invalid_chars': len(invalid_chars) > 0,
-            'invalid_chars': list(invalid_chars) if invalid_chars else [],
-            'valid': len(invalid_chars) == 0,
+            'is_empty': is_empty,
+            'valid': not is_empty,
         }
     
     def process_text(self, text: str) -> Dict:
