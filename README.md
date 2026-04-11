@@ -2,6 +2,12 @@
 
 A comprehensive data preprocessing and validation pipeline for Text-to-Speech (TTS) systems supporting multiple datasets including LJSpeech and LibriTTS, with Vocos neural vocoder integration.
 
+## About
+
+This project was developed by the **Onit agent** ([@sibyl-oracles/onit](https://github.com/sibyl-oracles/onit)) working in the **Onit Sandbox** ([@sibyl-oracles/onit-sandbox](https://github.com/sibyl-oracles/onit-sandbox)). All experiments were executed in a Docker container equipped with a **single NVIDIA A100 GPU**.
+
+The sandbox environment provides an isolated, reproducible platform for machine learning research, enabling automated experimentation and evaluation workflows.
+
 ## Overview
 
 This project implements robust data transformation pipelines for TTS datasets:
